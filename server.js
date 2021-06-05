@@ -1,23 +1,37 @@
 const knex = require("knex");
-const restify = require("restify");
+const express = require("express");
+
+const app = express();
 
 const connectionString = require("./connectionString");
+const mustacheExpress = require("mustache-express");
 
 const client = knex({
   client: "pg",
   connection: connectionString,
 });
 
-const server = restify.createServer();
-server.pre(restify.pre.sanitizePath());
-server.pre(restify.pre.userAgentConnection());
-server.listen(8080);
+/* const server = app.createServer();
+server.pre(app.pre.sanitizePath());
+server.pre(app.pre.userAgentConnection()); */
+app.listen(8080);
 
-server.get('/', function(req,res,next){
-  let sites = client("construction_sites").first().then(rows => rows);
-  console.log(sites);
-  //res.send(sites);
-  next();
+app.engine("mustache", mustacheExpress());
+app.set("view engine", "mustache");
+
+app.set("views",__dirname+ "/views");
+
+app.get('/', async function(req,res,next){
+  let sites = await client.from("construction_sites").select("*");
+  let array = {sites : sites};
+  res.render('index', array);
+});
+
+app.get('/site/:id', async function(req,res){
+  let materials = await client.from("materials").select("*").where({
+    construction_site_id: req.params.id
+  });
+  console.log(materials);
 });
 
 let shuttingDown = false;
@@ -33,7 +47,7 @@ function shutdown() {
   }, 5000);
 
   console.log("Closing server connections...");
-  server.close(() => {
+  app.close(() => {
     console.log("Closing database connections...");
     client.destroy();
     clearTimeout(shutdownTimeout);
